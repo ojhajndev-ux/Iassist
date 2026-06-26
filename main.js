@@ -25,7 +25,7 @@ function createChatWindow() {
 
   // 1. Core Invisibility: Prevents the window from being captured by screen sharing/recording tools.
   // This is the "magic" that makes you invisible during full-screen shares.
-  // mainWindow.setContentProtection(true);
+  mainWindow.setContentProtection(true);
 
   // 2. Process Masquerading: Changes how the app appears in Task Manager / Activity Monitor.
   // This makes it look like a harmless system utility rather than an AI tool.
