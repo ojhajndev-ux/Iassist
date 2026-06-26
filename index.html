@@ -1,0 +1,1253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat Overlay</title>
+  
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    * {
+      cursor: default !important;
+      box-sizing: border-box;
+    }
+
+    /* Basic Layout Styles */
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: rgba(18, 18, 24, 0.85); /* Dynamic opacity applied here via JS */
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      color: #f8fafc;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      overflow: hidden;
+      transition: background 0.2s ease, backdrop-filter 0.2s ease;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+
+    /* Custom Title Bar for Dragging the Window */
+    .drag-handle {
+      height: 48px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 100%);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      -webkit-app-region: drag;
+      user-select: none;
+      position: relative;
+      padding: 0 16px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      -webkit-app-region: no-drag;
+    }
+
+    .tab {
+      padding: 6px 14px;
+      cursor: default;
+      border-radius: 20px;
+      background: transparent;
+      font-weight: 500;
+      font-size: 13px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      color: #94a3b8;
+      border: 1px solid transparent;
+    }
+
+    .tab.active {
+      background: rgba(99, 102, 241, 0.15);
+      color: #818cf8;
+      border-color: rgba(99, 102, 241, 0.3);
+      box-shadow: 0 0 10px rgba(99, 102, 241, 0.1);
+    }
+
+    .tab:hover:not(.active) {
+      background: rgba(255, 255, 255, 0.05);
+      color: #e2e8f0;
+    }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      -webkit-app-region: no-drag;
+    }
+
+    #opacitySlider {
+      width: 80px;
+      cursor: default;
+      accent-color: #818cf8;
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.1);
+      outline: none;
+      -webkit-appearance: none;
+    }
+
+    #opacitySlider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #818cf8;
+      cursor: default;
+      transition: transform 0.2s;
+    }
+
+    #opacitySlider::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    .close-btn {
+      color: #94a3b8;
+      cursor: default;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      transition: all 0.2s;
+      background: transparent;
+    }
+    
+    .close-btn:hover {
+      color: #ef4444;
+      background: rgba(239, 68, 68, 0.1);
+    }
+
+    /* View Containers */
+    .view-container {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      overflow: hidden;
+      animation: fadeIn 0.3s ease;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .view-container.active {
+      display: flex;
+    }
+
+    /* Chat View Styles */
+    .message-area {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+    .message {
+      max-width: 88%;
+      padding: 12px 16px;
+      border-radius: 18px;
+      font-size: 14px;
+      line-height: 1.5;
+      word-wrap: break-word;
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      color: #fff;
+      align-self: flex-end;
+      border-bottom-right-radius: 4px;
+      box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+      animation: messagePop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    
+    @keyframes messagePop {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    
+    .message.bot {
+      background: rgba(255, 255, 255, 0.05);
+      align-self: flex-start;
+      border-bottom-left-radius: 4px;
+      border-bottom-right-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .message pre {
+      background: rgba(0, 0, 0, 0.4);
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      overflow-x: auto;
+      margin: 10px 0;
+    }
+    
+    .message code {
+      font-family: 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', monospace;
+      font-size: 13px;
+    }
+
+    .message :not(pre) > code {
+      background: rgba(0, 0, 0, 0.3);
+      color: #a5b4fc;
+      padding: 3px 6px;
+      border-radius: 6px;
+    }
+    
+    .message p { margin: 0 0 10px 0; }
+    .message p:last-child { margin-bottom: 0; }
+
+    .input-area {
+      padding: 16px 20px;
+      background: linear-gradient(0deg, rgba(15, 15, 20, 0.95) 0%, rgba(15, 15, 20, 0) 100%);
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+    }
+
+    #messageInput {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      color: #f8fafc;
+      padding: 12px 16px;
+      font-size: 14px;
+      line-height: 1.5;
+      outline: none;
+      resize: none;
+      font-family: inherit;
+      min-height: 46px;
+      max-height: 150px;
+      transition: all 0.3s ease;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    #messageInput:focus {
+      border-color: #818cf8;
+      background: rgba(255, 255, 255, 0.06);
+      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2), inset 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    textarea::placeholder {
+      color: #64748b;
+    }
+
+    button {
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      color: white;
+      border: none;
+      padding: 0 20px;
+      height: 46px;
+      border-radius: 16px;
+      cursor: default;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.2s;
+      box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+    }
+    
+    button:active {
+      transform: translateY(1px);
+    }
+    
+    button:disabled {
+      background: #334155;
+      color: #94a3b8;
+      box-shadow: none;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Notes View Styles */
+    .notes-mode {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .notes-mode.active {
+      display: flex;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .notes-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .notes-header h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: #f1f5f9;
+      letter-spacing: -0.01em;
+    }
+
+    .icon-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      font-size: 18px;
+      line-height: 1;
+      color: #f8fafc;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      transition: all 0.2s;
+      box-shadow: none;
+    }
+
+    .icon-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .action-btn {
+      padding: 8px 16px;
+      font-size: 13px;
+      border-radius: 12px;
+      height: auto;
+    }
+
+    .notes-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .note-item {
+      background: rgba(255, 255, 255, 0.03);
+      padding: 16px;
+      border-radius: 16px;
+      cursor: default;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .note-item::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(0,0,0,0));
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .note-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(99, 102, 241, 0.3);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.2), 0 0 15px rgba(99,102,241,0.1);
+    }
+    
+    .note-item:hover::before { opacity: 1; }
+
+    .note-item-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: #fff;
+      position: relative;
+      z-index: 1;
+    }
+
+    .note-item-label {
+      display: inline-block;
+      font-size: 11px;
+      padding: 4px 10px;
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      border-radius: 12px;
+      font-weight: 600;
+      color: white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      position: relative;
+      z-index: 1;
+    }
+    
+    .note-item-empty {
+      text-align: center;
+      color: #64748b;
+      font-size: 14px;
+      margin-top: 40px;
+      padding: 40px;
+      background: rgba(255,255,255,0.02);
+      border-radius: 16px;
+      border: 1px dashed rgba(255,255,255,0.1);
+    }
+
+    .note-editor {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .editor-title {
+      background: transparent;
+      border: none;
+      color: white;
+      font-size: 42px;
+      font-weight: 700;
+      outline: none;
+      padding: 0;
+      margin-bottom: 24px;
+      letter-spacing: -0.02em;
+      transition: color 0.2s;
+      width: 100%;
+      font-family: inherit;
+    }
+
+    .editor-title::placeholder { color: rgba(255,255,255,0.2); font-weight: 700; }
+    .editor-title:focus { color: #fff; }
+
+    /* Block Editor Styles */
+    .blocks-container {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 8px;
+      padding-bottom: 20px;
+    }
+
+    .block-wrapper {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      position: relative;
+      padding: 2px 0;
+      background: transparent;
+    }
+    
+    .block-wrapper:hover {
+      background: transparent;
+    }
+
+    .block-controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      opacity: 0;
+      transition: opacity 0.2s;
+      position: absolute;
+      left: -32px;
+      top: 6px;
+    }
+
+    .block-wrapper:hover .block-controls {
+      opacity: 1;
+    }
+
+    .block-delete {
+      background: transparent;
+      color: rgba(255,255,255,0.3);
+      border: none;
+      padding: 2px;
+      font-size: 16px;
+      cursor: default;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      box-shadow: none;
+      height: 24px;
+      width: 24px;
+    }
+    .block-delete:hover {
+      background: rgba(255,255,255,0.1);
+      color: white;
+    }
+
+    .block-content-area {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .block-text {
+      width: 100%;
+      background: transparent;
+      border: none;
+      color: #cbd5e1;
+      font-size: 15px;
+      resize: none;
+      outline: none;
+      line-height: 1.7;
+      padding: 4px;
+      min-height: 28px;
+      font-family: inherit;
+      overflow: hidden;
+    }
+    .block-text::placeholder { color: #475569; }
+
+    .block-header {
+      width: 100%;
+      background: transparent;
+      border: none;
+      color: #f8fafc;
+      font-size: 20px;
+      font-weight: 600;
+      outline: none;
+      padding: 6px 4px;
+      margin-top: 12px;
+      font-family: inherit;
+      letter-spacing: -0.01em;
+    }
+    .block-header::placeholder { color: #475569; }
+
+    .block-code-container {
+      background: #0f172a;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .block-language {
+      background: rgba(255, 255, 255, 0.03);
+      border: none;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      color: #94a3b8;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-family: 'ui-monospace', monospace;
+      outline: none;
+    }
+    .block-code {
+      background: transparent;
+      border: none;
+      color: #e2e8f0;
+      padding: 14px;
+      font-size: 13px;
+      font-family: 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
+      resize: none;
+      outline: none;
+      width: 100%;
+      box-sizing: border-box;
+      line-height: 1.6;
+      min-height: 60px;
+      overflow: hidden;
+    }
+
+    .block-dropdown-container {
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .block-summary {
+      background: transparent;
+      border: none;
+      color: #818cf8;
+      font-weight: 600;
+      font-size: 15px;
+      outline: none;
+      width: 100%;
+      font-family: inherit;
+    }
+    .block-summary::placeholder { color: #4f46e5; opacity: 0.5; }
+    .block-dropdown-content {
+      background: rgba(0,0,0,0.2);
+      border: 1px solid rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      color: #cbd5e1;
+      font-size: 14px;
+      padding: 12px;
+      resize: none;
+      outline: none;
+      width: 100%;
+      box-sizing: border-box;
+      min-height: 60px;
+      font-family: inherit;
+      line-height: 1.6;
+      overflow: hidden;
+    }
+
+    .add-block-menu {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      padding-top: 16px;
+      border-top: 1px dashed rgba(255,255,255,0.1);
+    }
+
+    .add-block-btn {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #94a3b8;
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: default;
+      transition: all 0.2s;
+      box-shadow: none;
+      height: auto;
+    }
+
+    .add-block-btn:hover {
+      background: rgba(99, 102, 241, 0.1);
+      border-color: rgba(99, 102, 241, 0.4);
+      color: #818cf8;
+      transform: translateY(-1px);
+    }
+    .header-editor-title {
+      background: transparent;
+      border: 1px solid transparent;
+      color: white;
+      font-size: 16px;
+      font-weight: 600;
+      outline: none;
+      padding: 6px 12px;
+      flex: 1;
+      margin: 0 12px;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+    .header-editor-title:focus {
+      background: rgba(255,255,255,0.05);
+      border-color: rgba(99, 102, 241, 0.4);
+    }
+    .header-editor-title::placeholder {
+      color: #64748b;
+    }
+    .slash-menu {
+      position: absolute;
+      display: none;
+      background: rgba(15, 15, 20, 0.95);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 6px;
+      flex-direction: column;
+      gap: 2px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      z-index: 1000;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      min-width: 160px;
+    }
+    .slash-menu.active {
+      display: flex;
+    }
+    .slash-menu-item {
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: default;
+      font-size: 13px;
+      color: #cbd5e1;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .slash-menu-item:hover {
+      background: rgba(99, 102, 241, 0.2);
+      color: #818cf8;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="drag-handle">
+    <div class="tabs">
+      <div class="tab active" data-target="chatView">Chat</div>
+      <div class="tab" data-target="notesView">Notes</div>
+    </div>
+    <div class="header-controls">
+      <input type="range" id="opacitySlider" min="0.1" max="1" step="0.05" title="Window Transparency">
+      <span id="closeBtn" class="close-btn">✖</span>
+    </div>
+  </div>
+
+  <!-- Chat View -->
+  <div id="chatView" class="view-container active">
+    <div class="message-area" id="messageArea"></div>
+    <form class="input-area" id="chatForm">
+      <textarea id="messageInput" placeholder="Type a message..."></textarea>
+      <button type="submit" id="sendBtn">Send</button>
+    </form>
+  </div>
+
+  <!-- Notes View -->
+  <div id="notesView" class="view-container">
+    
+    <!-- Notes List Mode -->
+    <div id="notesListMode" class="notes-mode active">
+      <div class="notes-header">
+        <h3>My Notes</h3>
+        <button id="newNoteBtn" class="icon-btn">+</button>
+      </div>
+      <div class="notes-list" id="notesList">
+        <!-- Notes will be injected here -->
+      </div>
+    </div>
+
+    <!-- Notes Edit Mode -->
+    <div id="notesEditMode" class="notes-mode">
+      <div class="notes-header">
+        <button id="backToNotesBtn" class="icon-btn" style="background: transparent; border: none; font-size: 20px;">←</button>
+        <div style="display: flex; gap: 8px;">
+          <button id="deleteNoteBtn" class="action-btn" style="background: transparent; color: #ff4757; display: none; border: 1px solid rgba(255,71,87,0.3);">Delete</button>
+          <button id="saveNoteBtn" class="action-btn" style="background: transparent; border: 1px solid rgba(255,255,255,0.2);">Done</button>
+        </div>
+      </div>
+      <div class="note-editor" style="padding: 40px 60px;">
+        <input type="text" id="noteTitle" placeholder="Untitled" class="editor-title">
+        <div id="blocksContainer" class="blocks-container">
+          <!-- Dynamic Blocks will be injected here -->
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Slash Menu -->
+  <div id="slashMenu" class="slash-menu">
+    <div class="slash-menu-item" data-type="text">Text</div>
+    <div class="slash-menu-item" data-type="header">Header</div>
+    <div class="slash-menu-item" data-type="code">Code Block</div>
+    <div class="slash-menu-item" data-type="dropdown">Dropdown</div>
+  </div>
+
+<script>
+const axios = require('axios');
+const path = require('path');
+const fs = require('fs');
+const { ipcRenderer } = require('electron');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+
+// --- Transparency Logic ---
+const opacitySlider = document.getElementById('opacitySlider');
+const savedOpacity = localStorage.getItem('appOpacity') || 0.85;
+
+function applyOpacity(val) {
+  document.body.style.backgroundColor = `rgba(30, 30, 30, ${val})`;
+  // Reduce blur as transparency increases (val goes down) so background is actually visible
+  const blurAmount = val < 0.5 ? (val * 16) : 8; 
+  document.body.style.backdropFilter = `blur(${blurAmount}px)`;
+}
+
+opacitySlider.value = savedOpacity;
+applyOpacity(savedOpacity);
+
+opacitySlider.addEventListener('input', (e) => {
+  const val = e.target.value;
+  applyOpacity(val);
+  localStorage.setItem('appOpacity', val);
+});
+
+// --- App State ---
+let notes = [];
+let currentEditingNoteId = null;
+let currentBlocks = [];
+const NOTES_FILE = path.join(__dirname, 'notes.json');
+
+// --- DOM Elements ---
+const closeBtn = document.getElementById('closeBtn');
+const tabs = document.querySelectorAll('.tab');
+const viewContainers = document.querySelectorAll('.view-container');
+
+// Chat DOM Elements
+const chatForm = document.getElementById('chatForm');
+const messageInput = document.getElementById('messageInput');
+const messageArea = document.getElementById('messageArea');
+const sendBtn = document.getElementById('sendBtn');
+
+// Notes DOM Elements
+const notesListMode = document.getElementById('notesListMode');
+const notesEditMode = document.getElementById('notesEditMode');
+const notesList = document.getElementById('notesList');
+const newNoteBtn = document.getElementById('newNoteBtn');
+const backToNotesBtn = document.getElementById('backToNotesBtn');
+const saveNoteBtn = document.getElementById('saveNoteBtn');
+const deleteNoteBtn = document.getElementById('deleteNoteBtn');
+const noteTitleInput = document.getElementById('noteTitle');
+const blocksContainer = document.getElementById('blocksContainer');
+const slashMenu = document.getElementById('slashMenu');
+const slashMenuItems = document.querySelectorAll('.slash-menu-item');
+let activeSlashBlock = null;
+
+// --- Initialization ---
+closeBtn.addEventListener('click', () => {
+    ipcRenderer.send('close-app');
+});
+
+loadNotes();
+
+// Navigation Logic
+tabs.forEach(tab => {
+  tab.addEventListener('click', () => {
+    tabs.forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    
+    const targetId = tab.getAttribute('data-target');
+    viewContainers.forEach(view => {
+      if (view.id === targetId) {
+        view.classList.add('active');
+      } else {
+        view.classList.remove('active');
+      }
+    });
+  });
+});
+
+// --- Chat Logic ---
+function scrollToBottom() {
+    messageArea.scrollTop = messageArea.scrollHeight;
+}
+
+function addMessageToUI(text, isUser = true) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'message';
+    if (!isUser) {
+        wrapper.classList.add('bot');
+    }
+
+    if (text) {
+        const textNode = document.createElement('div');
+        if (isUser) {
+            textNode.textContent = text;
+        } else {
+            textNode.innerHTML = marked.parse(text);
+            textNode.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+        }
+        wrapper.appendChild(textNode);
+    }
+
+    messageArea.appendChild(wrapper);
+    scrollToBottom();
+}
+
+messageInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.metaKey) {
+        e.preventDefault();
+        sendBtn.click();
+    }
+});
+
+chatForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const text = messageInput.value.trim();
+    if (!text) return;
+
+    addMessageToUI(text, true);
+    messageInput.value = '';
+    sendBtn.disabled = true;
+
+    try {
+        const response = await axios.post('https://api.deepseek.com/chat/completions', {
+            model: "deepseek-v4-flash",
+            messages: [
+                { role: "system", content: "You are a helpful assistant. Please always respond in English. Generate answers as if for an interview for an Automation Engineer role. The primary tech stack is JavaScript, Playwright, and CI/CD. Keep answers short and crisp, without any verbosity, following interview best practices. For code generation, keep the output very simple, straight, and in JavaScript unless specified otherwise." },
+                { role: "user", content: text }
+            ]
+        }, {
+            headers: {
+                'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const reply = response.data.choices[0].message.content;
+        addMessageToUI(reply, false);
+    } catch (error) {
+        console.error('API Error:', error);
+        let errorMsg = "Error communicating with DeepSeek API.";
+        if (error.response && error.response.data && error.response.data.error) {
+            errorMsg += " " + error.response.data.error.message;
+        }
+        addMessageToUI(errorMsg, false);
+    } finally {
+        sendBtn.disabled = false;
+        messageInput.focus();
+    }
+});
+
+// --- Notes Logic ---
+function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2);
+}
+
+function migrateNoteToBlocks(note) {
+  if (note.blocks) return note; // Already using blocks
+  const newBlocks = [];
+  if (note.content) {
+    newBlocks.push({ id: generateId(), type: 'text', content: note.content });
+  }
+  if (note.hasCode && note.code) {
+    newBlocks.push({ id: generateId(), type: 'code', language: note.language, content: note.code });
+  }
+  
+  return {
+    id: note.id,
+    title: note.title,
+    label: note.label,
+    timestamp: note.timestamp,
+    blocks: newBlocks
+  };
+}
+
+function loadNotes() {
+  try {
+    if (fs.existsSync(NOTES_FILE)) {
+      const data = fs.readFileSync(NOTES_FILE, 'utf8');
+      const parsedNotes = JSON.parse(data);
+      // Migrate old notes to block format
+      notes = parsedNotes.map(migrateNoteToBlocks);
+    } else {
+      notes = [];
+    }
+    renderNotesList();
+  } catch (err) {
+    console.error("Error loading notes:", err);
+    notes = [];
+  }
+}
+
+function saveNotes() {
+  try {
+    fs.writeFileSync(NOTES_FILE, JSON.stringify(notes, null, 2));
+    renderNotesList();
+  } catch (err) {
+    console.error("Error saving notes:", err);
+  }
+}
+
+function renderNotesList() {
+  notesList.innerHTML = '';
+  
+  if (notes.length === 0) {
+    notesList.innerHTML = '<div class="note-item-empty">No notes yet. Create one!</div>';
+    return;
+  }
+  
+  const sortedNotes = [...notes].sort((a, b) => b.timestamp - a.timestamp);
+  
+  sortedNotes.forEach(note => {
+    const noteEl = document.createElement('div');
+    noteEl.className = 'note-item';
+    noteEl.innerHTML = `
+      <div class="note-item-title">${note.title || 'Untitled Note'}</div>
+    `;
+    noteEl.addEventListener('click', () => openNoteEditor(note.id));
+    notesList.appendChild(noteEl);
+  });
+}
+
+function openNoteEditor(noteId = null) {
+  currentEditingNoteId = noteId;
+  
+  if (noteId) {
+    const note = notes.find(n => n.id === noteId);
+    if (note) {
+      noteTitleInput.value = note.title || '';
+      currentBlocks = JSON.parse(JSON.stringify(note.blocks || []));
+      deleteNoteBtn.style.display = 'block';
+    }
+  } else {
+    noteTitleInput.value = '';
+    currentBlocks = [];
+    deleteNoteBtn.style.display = 'none';
+    // Start with an empty text block for convenience
+    addBlock('text');
+  }
+  
+  renderBlocks();
+  notesListMode.classList.remove('active');
+  notesEditMode.classList.add('active');
+}
+
+function closeNoteEditor() {
+  notesEditMode.classList.remove('active');
+  notesListMode.classList.add('active');
+}
+
+// --- Block Editor Logic ---
+function autoResize(textarea) {
+  textarea.style.height = 'auto';
+  textarea.style.height = textarea.scrollHeight + 'px';
+}
+
+function renderBlocks() {
+  blocksContainer.innerHTML = '';
+  currentBlocks.forEach(block => {
+    const blockEl = createBlockElement(block);
+    blocksContainer.appendChild(blockEl);
+  });
+}
+
+function addBlock(type) {
+  const newBlock = { id: generateId(), type, content: '' };
+  if (type === 'code') newBlock.language = '';
+  if (type === 'dropdown') newBlock.summary = '';
+  
+  currentBlocks.push(newBlock);
+  renderBlocks();
+  
+  // Focus the last added block
+  setTimeout(() => {
+    const wrappers = blocksContainer.querySelectorAll('.block-wrapper');
+    if (wrappers.length > 0) {
+      const lastWrapper = wrappers[wrappers.length - 1];
+      const inputs = lastWrapper.querySelectorAll('input, textarea');
+      if (inputs.length > 0) inputs[0].focus();
+    }
+  }, 50);
+}
+
+function deleteBlock(id) {
+  currentBlocks = currentBlocks.filter(b => b.id !== id);
+  renderBlocks();
+}
+
+function createBlockElement(block) {
+  const blockEl = document.createElement('div');
+  blockEl.className = 'block-wrapper';
+  
+  const controlsEl = document.createElement('div');
+  controlsEl.className = 'block-controls';
+  const deleteBtn = document.createElement('button');
+  deleteBtn.className = 'block-delete';
+  deleteBtn.textContent = '⋮⋮';
+  deleteBtn.title = 'Delete Block';
+  deleteBtn.onclick = () => deleteBlock(block.id);
+  controlsEl.appendChild(deleteBtn);
+  
+  const contentEl = document.createElement('div');
+  contentEl.className = 'block-content-area';
+  
+  if (block.type === 'text') {
+    const ta = document.createElement('textarea');
+    ta.className = 'block-text';
+    ta.placeholder = "Type '/' for commands";
+    ta.value = block.content || '';
+    ta.addEventListener('input', (e) => {
+      block.content = e.target.value;
+      autoResize(e.target);
+      
+      const val = e.target.value;
+      if (val.endsWith('/')) {
+        activeSlashBlock = e.target;
+        const rect = e.target.getBoundingClientRect();
+        slashMenu.classList.add('active');
+        const menuHeight = slashMenu.offsetHeight || 150;
+        if (rect.bottom + 5 + menuHeight > window.innerHeight) {
+          slashMenu.style.top = `${rect.top - menuHeight - 5}px`;
+        } else {
+          slashMenu.style.top = `${rect.bottom + 5}px`;
+        }
+        slashMenu.style.left = `${rect.left}px`;
+      } else if (!val.includes('/')) {
+        hideSlashMenu();
+      }
+    });
+    contentEl.appendChild(ta);
+    setTimeout(() => autoResize(ta), 0);
+  } 
+  else if (block.type === 'header') {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'block-header';
+    input.placeholder = 'Header...';
+    input.value = block.content || '';
+    input.addEventListener('input', (e) => block.content = e.target.value);
+    contentEl.appendChild(input);
+  } 
+  else if (block.type === 'code') {
+    const container = document.createElement('div');
+    container.className = 'block-code-container';
+    
+    const langInput = document.createElement('input');
+    langInput.type = 'text';
+    langInput.className = 'block-language';
+    langInput.placeholder = 'Language (e.g. js)';
+    langInput.value = block.language || '';
+    langInput.addEventListener('input', (e) => block.language = e.target.value);
+    
+    const codeTa = document.createElement('textarea');
+    codeTa.className = 'block-code';
+    codeTa.placeholder = 'Code...';
+    codeTa.value = block.content || '';
+    codeTa.addEventListener('input', (e) => {
+      block.content = e.target.value;
+      autoResize(e.target);
+    });
+    
+    container.appendChild(langInput);
+    container.appendChild(codeTa);
+    contentEl.appendChild(container);
+    setTimeout(() => autoResize(codeTa), 0);
+  } 
+  else if (block.type === 'dropdown') {
+    const container = document.createElement('div');
+    container.className = 'block-dropdown-container';
+    
+    const sumInput = document.createElement('input');
+    sumInput.type = 'text';
+    sumInput.className = 'block-summary';
+    sumInput.placeholder = 'Dropdown Title';
+    sumInput.value = block.summary || '';
+    sumInput.addEventListener('input', (e) => block.summary = e.target.value);
+    
+    const contentTa = document.createElement('textarea');
+    contentTa.className = 'block-dropdown-content';
+    contentTa.placeholder = 'Hidden content...';
+    contentTa.value = block.content || '';
+    contentTa.addEventListener('input', (e) => {
+      block.content = e.target.value;
+      autoResize(e.target);
+    });
+    
+    container.appendChild(sumInput);
+    container.appendChild(contentTa);
+    contentEl.appendChild(container);
+    setTimeout(() => autoResize(contentTa), 0);
+  }
+  
+  blockEl.appendChild(controlsEl);
+  blockEl.appendChild(contentEl);
+  return blockEl;
+}
+
+slashMenuItems.forEach(item => {
+  item.addEventListener('click', () => {
+    const type = item.getAttribute('data-type');
+    
+    if (activeSlashBlock) {
+      const textVal = activeSlashBlock.value;
+      const lastSlash = textVal.lastIndexOf('/');
+      if (lastSlash !== -1) {
+        activeSlashBlock.value = textVal.substring(0, lastSlash);
+        const blockObj = currentBlocks.find(b => b.content === textVal);
+        if (blockObj) blockObj.content = activeSlashBlock.value;
+        autoResize(activeSlashBlock);
+      }
+    }
+    
+    addBlock(type);
+    hideSlashMenu();
+  });
+});
+
+function hideSlashMenu() {
+  slashMenu.classList.remove('active');
+  activeSlashBlock = null;
+}
+
+document.addEventListener('click', (e) => {
+  if (!slashMenu.contains(e.target)) {
+    hideSlashMenu();
+  }
+});
+
+// Click outside to create a new block like Notion
+document.querySelector('.note-editor').addEventListener('click', (e) => {
+  const blocksContainer = document.getElementById('blocksContainer');
+  if (e.target.classList.contains('note-editor') || e.target === blocksContainer) {
+    if (currentBlocks.length > 0) {
+      const lastBlock = currentBlocks[currentBlocks.length - 1];
+      if (lastBlock.type === 'text' && !lastBlock.content.trim()) {
+        const wrappers = blocksContainer.querySelectorAll('.block-wrapper');
+        if (wrappers.length > 0) {
+          const inputs = wrappers[wrappers.length - 1].querySelectorAll('textarea');
+          if (inputs.length > 0) inputs[0].focus();
+        }
+        return;
+      }
+    }
+    addBlock('text');
+  }
+});
+
+// Save Note
+newNoteBtn.addEventListener('click', () => openNoteEditor(null));
+backToNotesBtn.addEventListener('click', closeNoteEditor);
+
+deleteNoteBtn.addEventListener('click', () => {
+  if (currentEditingNoteId) {
+    notes = notes.filter(n => n.id !== currentEditingNoteId);
+    saveNotes();
+    closeNoteEditor();
+  }
+});
+
+saveNoteBtn.addEventListener('click', () => {
+  const noteData = {
+    title: noteTitleInput.value.trim() || 'Untitled Note',
+    blocks: currentBlocks,
+    timestamp: Date.now()
+  };
+  
+  if (currentEditingNoteId) {
+    const idx = notes.findIndex(n => n.id === currentEditingNoteId);
+    if (idx !== -1) {
+      notes[idx] = { ...notes[idx], ...noteData };
+    }
+  } else {
+    noteData.id = generateId();
+    notes.push(noteData);
+  }
+  
+  saveNotes();
+  closeNoteEditor();
+});
+
+</script>
+</body>
+</html>

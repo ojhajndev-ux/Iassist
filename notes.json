@@ -1,0 +1,60 @@
+[
+  {
+    "title": "Intro",
+    "blocks": [
+      {
+        "id": "mqt82u6mxq44klqdcw",
+        "type": "text",
+        "content": "Hi, I’m Jagannath Ojha. I’m currently working as a Senior Automation Engineer at Accenture with around 5 years of experience. My main skills are Playwright, Node.js, API automation, and recently I’ve also been working on Agentic AI solutions.\n\nIn my current project, my role is mainly to handle automation solutions for both UI and APIs using Playwright and Node.js. I also review and guide junior team members and work on improving test execution and efficiency.\n\nRecently, I built an AI-powered PDF validation solution where AI reads PDF data and validates it against API responses automatically."
+      },
+      {
+        "id": "mqul2iw983cefpfl7fj",
+        "type": "text",
+        "content": ""
+      }
+    ],
+    "timestamp": 1782457329866,
+    "id": "mqt8390oo38nsfqma0d"
+  },
+  {
+    "title": "Assersation",
+    "blocks": [
+      {
+        "id": "mqt89r7plbvlskz37i",
+        "type": "text",
+        "content": "toHaveTitle\nawait expect(locator).toBeVisible();\nawait expect(locator).toHaveText('Success');"
+      }
+    ],
+    "timestamp": 1782375421604,
+    "id": "mqt8b15wspxjbcmhgck"
+  },
+  {
+    "title": "alerts, Multiple Tabs, uplaod and down load",
+    "blocks": [
+      {
+        "id": "mqt8faenn23if6k02b9",
+        "type": "text",
+        "content": "alerts"
+      },
+      {
+        "id": "mqt8ffbk9o7np3gbhst",
+        "type": "code",
+        "content": "page.on('dialog', async dialog => {\n    console.log(dialog.message());\n    await dialog.accept();\n});",
+        "language": ""
+      },
+      {
+        "id": "mqt8fq77igcerpjrgb",
+        "type": "text",
+        "content": "Handle Multiple Tabs"
+      },
+      {
+        "id": "mqt8g3ay154eo79iu61",
+        "type": "code",
+        "content": "const [newPage] = await Promise.all([\n    context.waitForEvent('page'),\n    page.click('text=Open')\n]);\n\nawait newPage.waitForLoadState();\n",
+        "language": ""
+      }
+    ],
+    "timestamp": 1782375769873,
+    "id": "mqt8ejasywrh4cdhukp"
+  }
+]
